@@ -1,0 +1,193 @@
+#:import dp kivy.metrics.dp
+
+<RootWidget>:
+    orientation: 'vertical'
+    padding: dp(8)
+    spacing: dp(6)
+
+    # ===== 顶部：模式切换 =====
+    BoxLayout:
+        size_hint_y: None
+        height: dp(42)
+        spacing: dp(8)
+        Label:
+            text: '模式:'
+            size_hint_x: None
+            width: dp(44)
+            bold: True
+        ToggleButton:
+            text: '创建聊天室（主端）'
+            group: 'mode'
+            state: 'down' if app.is_host else 'normal'
+            on_release: app._switch_mode('host')
+        ToggleButton:
+            text: '加入聊天室（客端）'
+            group: 'mode'
+            state: 'down' if app.is_client else 'normal'
+            on_release: app._switch_mode('client')
+
+    # ===== 主端面板 =====
+    BoxLayout:
+        orientation: 'vertical'
+        size_hint_y: None
+        height: dp(140) if app.is_host else 0
+        spacing: dp(6)
+        opacity: 1 if app.is_host else 0
+        disabled: not app.is_host
+
+        # 服务器选择行
+        BoxLayout:
+            size_hint_y: None
+            height: dp(40)
+            spacing: dp(6)
+            Label:
+                text: '服务器:'
+                size_hint_x: None
+                width: dp(56)
+                bold: True
+            Spinner:
+                text: app.server_display
+                values: app.server_names
+                on_text: app.server_display = self.text
+                size_hint_x: 0.7
+
+        # 自定义实例输入行
+        BoxLayout:
+            size_hint_y: None
+            height: dp(40)
+            spacing: dp(6)
+            opacity: 1 if app.server_display == app.custom_label else 0
+            disabled: app.server_display != app.custom_label
+            TextInput:
+                text: app.custom_server
+                on_text: app.custom_server = self.text
+                hint_text: '输入 PrivateBin 实例地址，例如 https://my-bin.example.com/'
+                multiline: False
+            Button:
+                text: '应用并重建'
+                size_hint_x: None
+                width: dp(100)
+                on_release: app.apply_custom_server()
+
+        # 链接行
+        BoxLayout:
+            size_hint_y: None
+            height: dp(40)
+            spacing: dp(4)
+            TextInput:
+                text: app.link_text
+                readonly: True
+                hint_text: '聊天室链接将显示在此'
+            Button:
+                text: '复制混淆'
+                size_hint_x: None
+                width: dp(76)
+                on_release: app.copy_link()
+            Button:
+                text: '复制原链'
+                size_hint_x: None
+                width: dp(76)
+                on_release: app.copy_raw_link()
+            Button:
+                text: '重建'
+                size_hint_x: None
+                width: dp(60)
+                on_release: app._retry_create()
+            Button:
+                text: '删除'
+                size_hint_x: None
+                width: dp(60)
+                on_release: app._delete_room()
+
+    # ===== 客端面板 =====
+    BoxLayout:
+        size_hint_y: None
+        height: dp(42) if app.is_client else 0
+        spacing: dp(6)
+        opacity: 1 if app.is_client else 0
+        disabled: not app.is_client
+        TextInput:
+            id: url_input
+            hint_text: '粘贴主端分享的混淆文本（PBC1: 开头）或原始链接'
+            multiline: False
+        Button:
+            text: '已连接' if app.is_connected else '连接'
+            size_hint_x: None
+            width: dp(72)
+            disabled: app.is_connected
+            on_release: app._connect_client(url_input.text)
+        Button:
+            text: '断开'
+            size_hint_x: None
+            width: dp(64)
+            disabled: not app.is_connected
+            on_release: app._disconnect()
+
+    # ===== 状态栏 =====
+    BoxLayout:
+        size_hint_y: None
+        height: dp(30)
+        Label:
+            text: app.reminder_text
+            color: 0.1, 0.45, 0.9, 1
+            bold: True
+            halign: 'left'
+            valign: 'middle'
+            text_size: self.size
+        Label:
+            text: app.status_text
+            color: 0.4, 0.4, 0.4, 1
+            halign: 'right'
+            valign: 'middle'
+            text_size: self.size
+
+    # ===== 对话显示区 =====
+    BoxLayout:
+        orientation: 'vertical'
+        Label:
+            text: '对话内容（每 3 秒自动刷新）  请勿违反当地法律法规！'
+            size_hint_y: None
+            height: dp(24)
+            color: 0.4, 0.4, 0.4, 1
+            halign: 'left'
+            valign: 'middle'
+            text_size: self.size
+        ScrollView:
+            id: comments_scroll
+            Label:
+                text: app.comments_text
+                size_hint_y: None
+                height: self.texture_size[1]
+                text_size: self.width - dp(16), None
+                halign: 'left'
+                valign: 'top'
+                padding: dp(8), dp(8)
+                color: 0.15, 0.15, 0.15, 1
+
+    # ===== 发送区 =====
+    BoxLayout:
+        size_hint_y: None
+        height: dp(48)
+        spacing: dp(6)
+        Label:
+            text: '昵称:'
+            size_hint_x: None
+            width: dp(44)
+        TextInput:
+            id: nickname_input
+            size_hint_x: 0.28
+            multiline: False
+            hint_text: '昵称'
+        TextInput:
+            id: comment_input
+            hint_text: '输入消息...'
+            multiline: False
+            on_text_validate: app.send_comment(self.text, nickname_input.text) or setattr(self, 'text', '')
+        Button:
+            text: '发送'
+            size_hint_x: None
+            width: dp(72)
+            disabled: not (app.is_connected or app.is_host) or app._deleting
+            on_release:
+                app.send_comment(comment_input.text, nickname_input.text)
+                comment_input.text = ''
